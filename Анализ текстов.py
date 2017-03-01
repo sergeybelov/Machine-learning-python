@@ -65,11 +65,12 @@ gs = GridSearchCV(clf, grid, scoring='accuracy', cv=cv)
 gs.fit(dataMatrix, y_train)
 
 #записываем параметры в массив
-params=gs.cv_results_['params']
+validationTest=dict(zip(gs.cv_results_['mean_test_score'], gs.cv_results_['params']))#получаем инфу по лучшему параметру в виде массива, который склеиваем с оценкой качества
+validationTestData=pd.DataFrame(data=validationTest).transpose()#создаем датафрейм с транспонированием, покольку значения полявляются в колонках, а не строках
+validationTestData.sort_index(ascending=[False],inplace=True)
 
-validationTest={}
-for a in gs.grid_scores_:
-    validationTest[a.mean_validation_score]=a.parameters# — оценка качества по кросс-валидации и значения параметров
+#for a in gs.grid_scores_:
+ #   validationTest[a.mean_validation_score]=a.parameters# — оценка качества по кросс-валидации и значения параметров
     
 #==============================================================================
 # Обучите SVM по всей выборке с оптимальным параметром C, найденным на предыдущем шаге.
