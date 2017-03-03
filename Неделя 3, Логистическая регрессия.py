@@ -43,21 +43,32 @@ def GradientDescent(C,data):
 
             weightsDelta=[0.,0.]
             mainValue=obj[0]*(1-1/(1+exp(-obj[0]*(weights[0]*obj[1]+weights[1]*obj[2]))))
+
+            #?? weightsDelta=list(map(lambda w,x: w+=x*mainValue-k*C*w))
+            #>>> f(*[1, 2, 3], **{'a': 4, 'b': 5})
+            #        1 2 3 4 5
             for index in range(2):
                 weightsDelta[index]+=obj[index+1]*mainValue-k*C*weights[index]
 
         #доведите до сходимости (евклидово расстояние между векторами весов на соседних итерациях должно быть не больше 1e-5)
-        _sum=0
-        for index in range(2):#рассчитываем евклидово расстояние
-            val=oldweightsDelta[index]-weightsDelta[index]
-            _sum+=val**2
+        #_sum=0
+        #for index in range(2):#рассчитываем евклидово расстояние
+        #    val=oldweightsDelta[index]-weightsDelta[index]
+        #    _sum+=val**2
+        # --- Эквивалентно ---
+        _sum=sum(list(map(lambda w1,w2: (w1-w2)**2,oldweightsDelta,weightsDelta)))
+
+        #sum = reduce(lambda a, x: a + x, [0, 1, 2, 3, 4])
+
         if sqrt(_sum)<errorAccuracy: break#выходим из цикла если достигли целевого показателя ошибки
 
         #for index in range(2):
         #    weights[index]+=weightsDelta[index]*k/l
         # --- Эквивалентно ---
-        #weights=map(lambda w,wd: w+wd*k/l,weights,weightsDelta)
-        weights=[w+wd*k/l for w,wd in zip(weights,weightsDelta)]
+        #In Python 3, map returns an iterable object of type map, and not a subscriptible list,
+        #which would allow you to write map[i]. To force a list result, write "list"
+        weights=list(map(lambda w,wd: w+wd*k/l,weights,weightsDelta))
+        #weights=[w+wd*k/l for w,wd in zip(weights,weightsDelta)]
 
 
     return weights
