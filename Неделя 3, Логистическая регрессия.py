@@ -7,7 +7,8 @@ Created on Fri Mar  3 09:44:48 2017
 
 import pandas as pd
 from math import exp
-from math import sqrt
+from scipy.spatial import distance
+from sklearn.metrics import roc_auc_score
 
 
 #==============================================================================
@@ -15,62 +16,62 @@ from math import sqrt
 #==============================================================================
 
 data= pd.read_csv('data-logistic.csv',header=None)
-#y_train = data[0]#Класс объекта
-#X_train = data.loc[:, 1:]#Характеристики объектов
-
-#y_train.columns = ['x']
-#X_train.columns = ['x1','x2']#xi1 и xi2 — значение первого и второго признаков соответственно на объекте xi
-#data=None#Очистка памяти от переменной
-
 
 #==============================================================================
 # Реализуйте градиентный спуск (gradient descent) для обычной и
 # L2-регуляризованной (с коэффициентом регуляризации 10) логистической регрессии - это коэффициент C.
 # Используйте длину шага k=0.1. В качестве начального приближения используйте вектор (0, 0).
 #==============================================================================
-#weight=pd.DataFrame({'w1' : [0.],
-#                    'w2' : [0.]})#Инициализируем матрицу весов
 def GradientDescent(C,data):
+    print('C=%d' %C)
     errorAccuracy=10**-5
     weights=[0.,0.]
     k=0.1#длина шага
     l=data[0].count()#количество элементов в выборке
+    distance_euclidean=0
 
     weightsDelta=[0.,0.]
     for step in range(10000):#Рекомендуется ограничить сверху число итераций десятью тысячами.
+        oldweightsDelta=weightsDelta
+        weightsDelta=[0.,0.]
+
         for obj in data.values:
-            oldweightsDelta=weightsDelta
-
-            weightsDelta=[0.,0.]
-            mainValue=obj[0]*(1-1/(1+exp(-obj[0]*(weights[0]*obj[1]+weights[1]*obj[2]))))
-
-            #?? weightsDelta=list(map(lambda w,x: w+=x*mainValue-k*C*w))
-            #>>> f(*[1, 2, 3], **{'a': 4, 'b': 5})
-            #        1 2 3 4 5
-            for index in range(2):
-                weightsDelta[index]+=obj[index+1]*mainValue-k*C*weights[index]
+            y=obj[0]
+            gradient=y*(1-1/(1+exp(-y*(weights[0]*obj[1]+weights[1]*obj[2]))))
+            weightsDelta=list(map(lambda w,wd,x: wd+x*gradient-k*C*w,weights,weightsDelta,obj[1:]))
 
         #доведите до сходимости (евклидово расстояние между векторами весов на соседних итерациях должно быть не больше 1e-5)
-        #_sum=0
-        #for index in range(2):#рассчитываем евклидово расстояние
-        #    val=oldweightsDelta[index]-weightsDelta[index]
-        #    _sum+=val**2
-        # --- Эквивалентно ---
-        _sum=sum(list(map(lambda w1,w2: (w1-w2)**2,oldweightsDelta,weightsDelta)))
+        distance_euclidean=distance.euclidean(weightsDelta,oldweightsDelta)
+        if distance_euclidean<errorAccuracy:
+            print('Дошли до заданной ошибки точности на шаге: %d' % step)
+            break
 
-        #sum = reduce(lambda a, x: a + x, [0, 1, 2, 3, 4])
-
-        if sqrt(_sum)<errorAccuracy: break#выходим из цикла если достигли целевого показателя ошибки
-
-        #for index in range(2):
-        #    weights[index]+=weightsDelta[index]*k/l
-        # --- Эквивалентно ---
-        #In Python 3, map returns an iterable object of type map, and not a subscriptible list,
-        #which would allow you to write map[i]. To force a list result, write "list"
         weights=list(map(lambda w,wd: w+wd*k/l,weights,weightsDelta))
-        #weights=[w+wd*k/l for w,wd in zip(weights,weightsDelta)]
 
-
+    print('Евклидово расстояние=%.6f' %distance_euclidean)
     return weights
 
-weights=GradientDescent(1,data)#C=1
+#==============================================================================
+# Какое значение принимает AUC-ROC на обучении без регуляризации и при ее использовании?
+# Эти величины будут ответом на задание. В качестве ответа приведите два числа через пробел.
+# Обратите внимание, что на вход функции roc_auc_score нужно подавать оценки вероятностей, подсчитанные обученным алгоритмом.
+# Для этого воспользуйтесь сигмоидной функцией: a(x) = 1 / (1 + exp(-w1 x1 - w2 x2)).
+#==============================================================================
+def GetAUC_ROC(C,data):
+    weights=GradientDescent(C,data)
+    y_true = list(map(lambda y: 0 if y<0 else 1 ,data[0].values))#Класс объекта
+    X_train = data.loc[:, 1:]#Характеристики объектов
+
+    y_scores=list(map(lambda x: 1 / (1 + exp(-weights[0]*x[0] - weights[1]*x[1])) ,X_train.values))
+    aUC_ROC=roc_auc_score(y_true, y_scores)
+    print ('AUC_ROC=%.3f' % round(aUC_ROC,3))
+    print('-----')
+    return round(aUC_ROC,3)
+
+#выводим ответ
+answ=[]
+answ.append(GetAUC_ROC(0,data))
+answ.append(GetAUC_ROC(2,data))
+
+print ('Ответ')
+print (' '.join(map(lambda x: str(x), answ)))
