@@ -10,7 +10,8 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 from sklearn.metrics import f1_score
-
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import precision_recall_curve
 #==============================================================================
 # Загрузите файл classification.csv. В нем записаны истинные классы объектов выборки (колонка true)
 # и ответы некоторого классификатора (колонка predicted).
@@ -67,3 +68,53 @@ del accuracy_values
 # Загрузите этот файл.
 #==============================================================================
 data= pd.read_csv('scores.csv')
+
+#==============================================================================
+# Посчитайте площадь под ROC-кривой для каждого классификатора.
+# Какой классификатор имеет наибольшее значение метрики AUC-ROC (укажите название столбца)?
+# Воспользуйтесь функцией sklearn.metrics.roc_auc_score.
+#==============================================================================
+def computeAUCROC(y_true,y_score):
+    return roc_auc_score(y_true,y_score)
+
+y_true=data['true'].values
+accuracy_values={}
+accuracy_values['score_logreg']=roc_auc_score(y_true,data['score_logreg'].values)
+accuracy_values['score_svm']=roc_auc_score(y_true,data['score_svm'].values)
+accuracy_values['score_knn']=roc_auc_score(y_true,data['score_knn'].values)
+accuracy_values['score_tree']=roc_auc_score(y_true,data['score_tree'].values)
+
+dt=pd.DataFrame(data=accuracy_values,index=[0]).transpose()
+dt.sort_values([0], ascending=[False],inplace=True)
+print('Наименование лучшего классификатора')
+print(dt.head(1))
+print('-----')
+del accuracy_values
+
+#==============================================================================
+# Какой классификатор достигает наибольшей точности (Precision) при полноте (Recall) не менее 70% ?
+# Чтобы получить ответ на этот вопрос, найдите все точки precision-recall-кривой с помощью функции
+# sklearn.metrics.precision_recall_curve. Она возвращает три массива: precision, recall, thresholds.
+# В них записаны точность и полнота при определенных порогах, указанных в массиве thresholds.
+# Найдите максимальной значение точности среди тех записей, для которых полнота не меньше, чем 0.7.
+#==============================================================================
+def CalculateThresholds(y_true,y_scores):
+    precision, recall, thresholds=precision_recall_curve(y_true,y_scores)
+    dt=pd.DataFrame(data=precision, columns=['precision'])#Создаем датафрейм
+    dt['recall']=recall#добавляем колонку
+    dt['precision_sel']=dt.apply(lambda x: 0 if x['recall']<0.7 else x['precision'],axis=1)#выкидываем лишние записи из точности по фильтру полноты
+    dt.sort_values(['precision_sel'], ascending=[False],inplace=True)#сортируем по точности
+    dt=dt.reset_index(drop=True)#реиндексируем
+    return dt.loc[0,'precision_sel']#выбираем максимум точности
+
+accuracy_values={}
+accuracy_values['score_logreg']=CalculateThresholds(y_true,data['score_logreg'].values)
+accuracy_values['score_svm']=CalculateThresholds(y_true,data['score_svm'].values)
+accuracy_values['score_knn']=CalculateThresholds(y_true,data['score_knn'].values)
+accuracy_values['score_tree']=CalculateThresholds(y_true,data['score_tree'].values)
+
+dt=pd.DataFrame(data=accuracy_values,index=[0]).transpose()
+dt.sort_values([0], ascending=[False],inplace=True)
+print('Какой классификатор достигает наибольшей точности')
+print(dt.head(1))
+print('-----')
