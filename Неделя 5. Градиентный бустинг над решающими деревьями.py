@@ -7,6 +7,11 @@ Created on Tue Mar 14 09:54:57 2017
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
+from math import exp
+import numpy as np
+from sklearn.metrics import log_loss
+import matplotlib.pyplot as plt
+
 #==============================================================================
 # Загрузите выборку из файла gbm-data.csv с помощью pandas и преобразуйте ее в массив numpy (параметр values у датафрейма).
 # В первой колонке файла с данными записано, была или нет реакция. Все остальные колонки (d1 - d1776)
@@ -25,9 +30,26 @@ del data_train
 # Обучите GradientBoostingClassifier с параметрами n_estimators=250, verbose=True, random_state=241 и
 # для каждого значения learning_rate из списка [1, 0.5, 0.3, 0.2, 0.1] проделайте следующее:
 #==============================================================================
-learning_rate=[1]#, 0.5, 0.3, 0.2, 0.1]
-for lr in learning_rate:
-    gbc=GradientBoostingClassifier(n_estimators=250, verbose=True, random_state=241,learning_rate=lr)
-    gbc.fit(X_train,y_train)
+vfunc = np.vectorize(lambda y: 1/(1+exp(-y)))#настройка  функции для numpy array
 
-    df=gbc.staged_decision_function(X_test)# предсказания качества на обучающей и тестовой выборке на каждой итерации
+def calc(X,y_true,n_est):
+    score=np.empty(n_est)
+    df=clf.staged_decision_function(X)# предсказания качества на обучающей и тестовой выборке на каждой итерации
+    for i, y_pred in enumerate(df):
+        score[i] = log_loss(y_true, vfunc(y_pred))#Преобразуйте полученное предсказание с помощью сигмоидной функции по формуле 1 / (1 + e^{−y_pred}), где y_pred — предсказанное значение. 1/(1+exp(-y))
+    return score
+
+
+learning_rate=[1, 0.5, 0.3, 0.2, 0.1]
+n_est=250
+for lr in learning_rate:
+    clf=GradientBoostingClassifier(n_estimators=n_est, verbose=False, random_state=241,learning_rate=lr)
+    clf.fit(X_train,y_train)
+
+    train_score = calc(X_train,y_train,n_est)
+    test_score = calc(X_test,y_test,n_est)
+
+    plt.figure()
+    plt.plot(test_score, 'r', linewidth=3)
+    plt.plot(train_score, 'g', linewidth=2)
+    plt.legend(['test', 'train'])
