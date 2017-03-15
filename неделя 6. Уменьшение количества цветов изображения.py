@@ -9,6 +9,7 @@ import pylab
 from  skimage import img_as_float
 import pandas as pd
 from sklearn.cluster import KMeans
+from math import log10
 #==============================================================================
 # Для работы с изображениями мы рекомендуем воспользоваться пакетом scikit-image.
 # Чтобы загрузить изображение, необходимо выполнить следующую команду
@@ -31,32 +32,58 @@ imgMatrix={}
 index=0
 for x in range(len(imgFloat)):
     for y in range(len(imgFloat[x])):
-        I=imgFloat[x][y].sum()/3.#преобразовываем значениями интенсивности в пространстве RGB
-        imgMatrix[index]={'x':x,'y':y,'I':I}
+        imgMatrix[index]=imgFloat[x][y]
         index+=1
 
 X_train=pd.DataFrame(imgMatrix).transpose()
+X_train.columns=['R','G','B']
 del imgMatrix
 
+etalon=X_train.copy()
 #==============================================================================
 # Запустите алгоритм K-Means с параметрами init='k-means++' и random_state=241.
 # После выделения кластеров все пиксели, отнесенные в один кластер, попробуйте заполнить двумя способами:
 # медианным и средним цветом по кластеру.
 #==============================================================================
-cls=KMeans(init='k-means++',random_state=241)
-kmeans = cls.fit(X_train)
+def psnr(X,X_train_true):
+        mse=0
+        for col in X_train_true.columns:
+            mse+=((X[col]-X_train_true[col])**2).sum()
+        mse/=(len(X_train_true)*3)
+        return 10*log10(1/mse)
 
-X_train['cluster']=kmeans.labels_#Добавляем классификацию кластера как колонку
-maxClusters=X_train.cluster.max()#максимальное разбиение кластеров
 
-X_train.set_index('cluster', inplace=True)#Делаем новую колонку индексом
-X_train2=X_train.copy()#копируем данные
+for clst in range(21):
+    X_train=etalon.copy()
+    maxClusters=clst+1
 
-for cluster in range(maxClusters):
-    thisCluster=cluster+1
-    median=X_train.loc[thisCluster,'I'].median()#считаем медиану интенсивности по кластеру
-    X_train.loc[thisCluster,'I']=median
+    cls=KMeans(init='k-means++',random_state=241,n_clusters=maxClusters)#обучаем кластеризатор
+    kmeans = cls.fit(X_train)
 
-    mean=X_train2.loc[thisCluster,'I'].mean()#считаем среднее интенсивности по кластеру
-    X_train2.loc[thisCluster,'I']=mean
+    X_train['cluster']=kmeans.labels_#Добавляем классификацию кластера как колонку
+    X_train.set_index('cluster', inplace=True)#Делаем новую колонку индексом
+    X_train2=X_train.copy()#копируем данные
+    X_train_true=X_train.copy()#копируем данные
 
+
+    #замена цвета
+    for cluster in range(maxClusters):
+        for col in X_train.columns:
+            median=X_train.loc[cluster,col].median()#считаем медиану интенсивности по кластеру
+            X_train.loc[cluster,col]=median
+
+            mean=X_train2.loc[cluster,col].mean()#считаем среднее интенсивности по кластеру
+            X_train2.loc[cluster,col]=mean
+
+    #==============================================================================
+    # Измерьте качество получившейся сегментации с помощью метрики PSNR.
+    # Эту метрику нужно реализовать самостоятельно (см. определение).
+    # Найдите минимальное количество кластеров, при котором значение PSNR выше 20
+    # (можно рассмотреть не более 20 кластеров, но не забудьте рассмотреть оба способа заполнения пикселей одного кластера).
+    # Это число и будет ответом в данной задаче.
+    #==============================================================================
+    psnrMedian=psnr(X_train,X_train_true)
+    psnrMean=psnr(X_train2,X_train_true)
+
+    print("Clusters count %d, psnrMedian=%f, psnrMean=%f" % (clst,psnrMedian,psnrMean))
+    if (psnrMedian>=20) | (psnrMean>=20): break
