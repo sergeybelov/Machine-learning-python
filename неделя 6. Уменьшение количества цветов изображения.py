@@ -37,7 +37,6 @@ for x in range(len(imgFloat)):
 
 X_train=pd.DataFrame(imgMatrix).transpose()
 del imgMatrix
-del imgFloat
 
 #==============================================================================
 # Запустите алгоритм K-Means с параметрами init='k-means++' и random_state=241.
@@ -46,3 +45,18 @@ del imgFloat
 #==============================================================================
 cls=KMeans(init='k-means++',random_state=241)
 kmeans = cls.fit(X_train)
+
+X_train['cluster']=kmeans.labels_#Добавляем классификацию кластера как колонку
+maxClusters=X_train.cluster.max()#максимальное разбиение кластеров
+
+X_train.set_index('cluster', inplace=True)#Делаем новую колонку индексом
+X_train2=X_train.copy()#копируем данные
+
+for cluster in range(maxClusters):
+    thisCluster=cluster+1
+    median=X_train.loc[thisCluster,'I'].median()#считаем медиану интенсивности по кластеру
+    X_train.loc[thisCluster,'I']=median
+
+    mean=X_train2.loc[thisCluster,'I'].mean()#считаем среднее интенсивности по кластеру
+    X_train2.loc[thisCluster,'I']=mean
+
