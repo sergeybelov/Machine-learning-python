@@ -45,12 +45,12 @@ etalon=X_train.copy()
 # После выделения кластеров все пиксели, отнесенные в один кластер, попробуйте заполнить двумя способами:
 # медианным и средним цветом по кластеру.
 #==============================================================================
-def psnr(X,X_train_true):
+def psnr(X,X_train_true):#Расчет PSNR по цветному изображению в float числах
         mse=0
         for col in X_train_true.columns:
             mse+=((X[col]-X_train_true[col])**2).sum()
-        mse/=(len(X_train_true)*3)
-        return 10*log10(1/mse)
+        mse/=len(X_train_true)*3
+        return 10*log10(1/mse)#в целочисленном формате в числителе было бы 255, в float - 1
 
 
 for clst in range(21):
@@ -85,5 +85,5 @@ for clst in range(21):
     psnrMedian=psnr(X_train,X_train_true)
     psnrMean=psnr(X_train2,X_train_true)
 
-    print("Clusters count %d, psnrMedian=%f, psnrMean=%f" % (clst,psnrMedian,psnrMean))
+    print("Clusters count %d, psnrMedian=%f, psnrMean=%f" % (maxClusters,psnrMedian,psnrMean))
     if (psnrMedian>=20) | (psnrMean>=20): break
