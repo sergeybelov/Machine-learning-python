@@ -5,6 +5,11 @@ Created on Tue Mar 21 10:40:37 2017
 
 """
 import pandas as pd
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+import datetime
+from sklearn.model_selection import GridSearchCV
 
 #==============================================================================
 # Считайте таблицу с признаками из файла features.csv с помощью кода, приведенного выше.
@@ -13,6 +18,7 @@ import pandas as pd
 data_train = pd.read_csv('features.csv')
 data_test = pd.read_csv('features_test.csv')
 
+train_Y=data_train['radiant_win']#Целевая переменная 1, если победила команда Radiant, 0 — иначе
 columns_train_difference=data_train.columns.difference(data_test.columns.values.tolist()).tolist()#Удалите признаки, которых нет в тестовой выборке - получаем различие в колонках
 data_train.drop(columns_train_difference, axis=1, inplace=True)#elfkztv внутри датасета
 
@@ -83,3 +89,64 @@ for col in data_train.columns.values.tolist():
 # Column dire_flying_courier_time, len=71132
 # Column dire_first_ward_time, len=95404
 #==============================================================================
+
+#==============================================================================
+# Замените пропуски на нули с помощью функции fillna(). На самом деле этот способ является предпочтительным для логистической регрессии,
+# поскольку он позволит пропущенному значению не вносить никакого вклада в предсказание.
+# Для деревьев часто лучшим вариантом оказывается замена пропуска на очень большое или очень маленькое значение —
+# в этом случае при построении разбиения вершины можно будет отправить объекты с пропусками в отдельную ветвь дерева.
+# Также есть и другие подходы — например, замена пропуска на среднее значение признака. Мы не требуем этого в задании,
+# но при желании попробуйте разные подходы к обработке пропусков и сравните их между собой.
+#==============================================================================
+nulledObjectIndex=pd.isnull(data_train)
+#for col in data_train.columns.values.tolist():
+    #tt=pd.isnull(data_train[col][data_train[col]==True])
+
+data_train.fillna(0, method=None, axis=1, inplace=True)
+
+
+#==============================================================================
+# Забудем, что в выборке есть категориальные признаки, и попробуем обучить градиентный бустинг над деревьями на имеющейся матрице
+# "объекты-признаки". Зафиксируйте генератор разбиений для кросс-валидации по 5 блокам (KFold),
+# не забудьте перемешать при этом выборку (shuffle=True), поскольку данные в таблице отсортированы по времени,
+# и без перемешивания можно столкнуться с нежелательными эффектами при оценивании качества.
+# Оцените качество градиентного бустинга (GradientBoostingClassifier) с помощью данной кросс-валидации,
+# попробуйте при этом разное количество деревьев (как минимум протестируйте следующие значения для количества деревьев: 10, 20, 30).
+# Долго ли настраивались классификаторы?
+# Достигнут ли оптимум на испытанных значениях параметра n_estimators, или же качество, скорее всего, продолжит расти при дальнейшем его увеличении?
+#==============================================================================
+
+kf = KFold(n_splits=5,shuffle=True)#Конструктор кросс-валидации
+#for n_est in [10,20,25,30,35]:
+    #clf=GradientBoostingClassifier(n_estimators=n_est, verbose=False, learning_rate=0.1)
+
+clf=GradientBoostingClassifier()
+param_grid  = {'n_estimators': [10, 20, 30, 40], 'max_depth': range(3,10), 'max_features': ['log2','sqrt',int(len(data_train.columns.values.tolist())/2)+1]}#параметры сетки тестирования алгоритма
+clf_grid = GridSearchCV(clf, param_grid,cv=kf, n_jobs=1,verbose=3,scoring='roc_auc')
+clf_grid.fit(data_train, train_Y)
+print("best_params")
+print(clf_grid.best_params_)
+
+#feature_importances_ : array, shape = [n_features]
+#The feature importances (the higher, the more important the feature).
+
+    #start_time = datetime.datetime.now()
+
+    #scores = cross_val_score(clf, data_train, train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
+    #print('Time elapsed:', datetime.datetime.now() - start_time)#замеряем время
+
+    #val=round(scores.mean()*100,2)#берем среднее значение оценки
+    #print("n_estimators=%s, val=%s\%" %(n_est,val))
+
+
+#==============================================================================
+# Как долго проводилась кросс-валидация для градиентного бустинга с 30 деревьями?
+# Инструкцию по измерению времени можно найти ниже по тексту.
+# Какое качество при этом получилось? Напомним, что в данном задании мы используем метрику качества AUC-ROC.
+# Имеет ли смысл использовать больше 30 деревьев в градиентном бустинге?
+# Что бы вы предложили делать, чтобы ускорить его обучение при увеличении количества деревьев?
+#==============================================================================
+
+
+
+
