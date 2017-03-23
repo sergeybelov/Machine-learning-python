@@ -120,12 +120,27 @@ kf = KFold(n_splits=5,shuffle=True)#Конструктор кросс-валид
 #for n_est in [10,20,25,30,35]:
     #clf=GradientBoostingClassifier(n_estimators=n_est, verbose=False, learning_rate=0.1)
 
-clf=GradientBoostingClassifier()
-param_grid  = {'n_estimators': [10, 20, 30, 40], 'max_depth': range(3,10), 'max_features': ['log2','sqrt',int(len(data_train.columns.values.tolist())/2)+1]}#параметры сетки тестирования алгоритма
-clf_grid = GridSearchCV(clf, param_grid,cv=kf, n_jobs=1,verbose=3,scoring='roc_auc')
+
+param_grid  = {'max_depth': [7,15]}#параметры сетки тестирования алгоритма
+clf_grid = GridSearchCV(GradientBoostingClassifier(n_estimators=30,max_features=len(data_train.columns.values.tolist())), param_grid,cv=kf, n_jobs=1,verbose=3,scoring='roc_auc')
 clf_grid.fit(data_train, train_Y)
 print("best_params")
 print(clf_grid.best_params_)
+
+clf=GradientBoostingClassifier(**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
+clf.fit(data_train, train_Y)#Обучаем
+
+#получаем список показателей которые сильнее всего влияют на предсказания
+featureImportances=pd.DataFrame(data=clf.feature_importances_)
+featureImportances.sort_values([0],ascending=False,inplace=True)
+listCol=data_train.columns.values.tolist()
+
+count=1
+for i in featureImportances.index:
+    print("%s: %s=%s" %(count,listCol[i],featureImportances.loc[i]))
+    count+=1
+    if count>10: break
+
 
 #feature_importances_ : array, shape = [n_features]
 #The feature importances (the higher, the more important the feature).
@@ -146,7 +161,3 @@ print(clf_grid.best_params_)
 # Имеет ли смысл использовать больше 30 деревьев в градиентном бустинге?
 # Что бы вы предложили делать, чтобы ускорить его обучение при увеличении количества деревьев?
 #==============================================================================
-
-
-
-
