@@ -98,9 +98,12 @@ for col in data_train.columns.values.tolist():
 # Также есть и другие подходы — например, замена пропуска на среднее значение признака. Мы не требуем этого в задании,
 # но при желании попробуйте разные подходы к обработке пропусков и сравните их между собой.
 #==============================================================================
+
+#Нужно найти все заполненные элементы
+#Вычислить максимум
 nulledObjectIndex=pd.isnull(data_train)
-#for col in data_train.columns.values.tolist():
-    #tt=pd.isnull(data_train[col][data_train[col]==True])
+for col in data_train.columns.values.tolist():
+    tt=data_train[nulledObjectIndex[col]==False]
 
 data_train.fillna(0, method=None, axis=1, inplace=True)
 
@@ -121,25 +124,48 @@ kf = KFold(n_splits=5,shuffle=True)#Конструктор кросс-валид
     #clf=GradientBoostingClassifier(n_estimators=n_est, verbose=False, learning_rate=0.1)
 
 
-param_grid  = {'max_depth': [7,15]}#параметры сетки тестирования алгоритма
-clf_grid = GridSearchCV(GradientBoostingClassifier(n_estimators=30,max_features=len(data_train.columns.values.tolist())), param_grid,cv=kf, n_jobs=1,verbose=3,scoring='roc_auc')
+param_grid  = {'n_estimators':[60,70],'max_depth': range(3,5),'max_features': ["log2"]}#параметры сетки тестирования алгоритма
+clf_grid = GridSearchCV(GradientBoostingClassifier(n_estimators=30), param_grid,cv=kf, n_jobs=1,verbose=3,scoring='roc_auc')
 clf_grid.fit(data_train, train_Y)
 print("best_params")
 print(clf_grid.best_params_)
+print("best_score")
+print(clf_grid.best_score_)
 
-clf=GradientBoostingClassifier(**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
+
+clf=GradientBoostingClassifier(max_depth=3, n_estimators=70)#Оценка качества=70.26 #**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
 clf.fit(data_train, train_Y)#Обучаем
+
+scores = cross_val_score(clf, data_train, train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
+val=round(scores.mean()*100,2)#берем среднее значение оценки
+print("Оценка качества=%s" % val)
+
 
 #получаем список показателей которые сильнее всего влияют на предсказания
 featureImportances=pd.DataFrame(data=clf.feature_importances_)
 featureImportances.sort_values([0],ascending=False,inplace=True)
 listCol=data_train.columns.values.tolist()
 
+#Оценка качества=70.25
+#1: d2_gold=8.43
+#2: r2_gold=8.3
+#3: d5_gold=8.01
+#4: d1_gold=7.87
+#5: r1_gold=7.81
+#6: d4_gold=7.77
+#7: r4_gold=7.61
+#8: r5_gold=7.47
+#9: r3_gold=7.28
+#10: d3_gold=7.07
+#11: first_blood_player1=2.37
+#12: radiant_boots_count=2.23
+
 count=1
 for i in featureImportances.index:
-    print("%s: %s=%s" %(count,listCol[i],featureImportances.loc[i]))
+    if featureImportances.loc[i][0]<0.02: break
+    print("%s: %s=%s" %(count,listCol[i],round(featureImportances.loc[i][0]*100,2)))
     count+=1
-    if count>10: break
+
 
 
 #feature_importances_ : array, shape = [n_features]
@@ -155,9 +181,8 @@ for i in featureImportances.index:
 
 
 #==============================================================================
-# Как долго проводилась кросс-валидация для градиентного бустинга с 30 деревьями?
-# Инструкцию по измерению времени можно найти ниже по тексту.
-# Какое качество при этом получилось? Напомним, что в данном задании мы используем метрику качества AUC-ROC.
-# Имеет ли смысл использовать больше 30 деревьев в градиентном бустинге?
-# Что бы вы предложили делать, чтобы ускорить его обучение при увеличении количества деревьев?
+# Как долго проводилась кросс-валидация для градиентного бустинга с 30 деревьями? - около минуты
+# Какое качество при этом получилось? Напомним, что в данном задании мы используем метрику качества AUC-ROC. ~70%
+# Имеет ли смысл использовать больше 30 деревьев в градиентном бустинге? Думаю нет, время обучения увеличивается сильно, а качество повышается слабо
+# Что бы вы предложили делать, чтобы ускорить его обучение при увеличении количества деревьев? Уменьшить глубину деревьев и количество признаков, потеря точности небольшая (max_depth=4, max_features=sqrt, n_estimators=50, score=0.700039, total=   3.9s), а выигрыш во времени на порядок, использовать признаки имеющие максимальный вес при бустинге
 #==============================================================================
