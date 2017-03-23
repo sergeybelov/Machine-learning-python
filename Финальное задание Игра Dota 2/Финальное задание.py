@@ -101,10 +101,10 @@ for col in data_train.columns.values.tolist():
 
 #Нужно найти все заполненные элементы
 #Вычислить максимум
-nulledObjectIndex=pd.isnull(data_train)
 for col in data_train.columns.values.tolist():
-    tt=data_train[nulledObjectIndex[col]==False]
-
+    idx=data_train[col].notnull()
+    tt=data_train.loc[idx,col]
+    
 data_train.fillna(0, method=None, axis=1, inplace=True)
 
 
