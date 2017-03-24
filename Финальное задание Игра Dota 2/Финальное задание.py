@@ -10,6 +10,7 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
 import datetime
 from sklearn.model_selection import GridSearchCV
+import numpy as np
 
 #==============================================================================
 # Считайте таблицу с признаками из файла features.csv с помощью кода, приведенного выше.
@@ -102,10 +103,19 @@ for col in data_train.columns.values.tolist():
 #Нужно найти все заполненные элементы
 #Вычислить максимум
 for col in data_train.columns.values.tolist():
+<<<<<<< HEAD
+    maxVal=data_train.loc[data_train[col].notnull(),col].median()#max()**3#Считаем максимум по всем заполненным значением и берем квадрат
+    data_train.loc[data_train[col].isnull(),col]=maxVal#Заполняем все незаполненные значения данным результатом
+
+
+#data_train.fillna(0, method=None, axis=1, inplace=True)
+
+=======
     idx=data_train[col].notnull()
     tt=data_train.loc[idx,col]
     
 data_train.fillna(0, method=None, axis=1, inplace=True)
+>>>>>>> 712fe3123d2f281727538779dc34e3430ee78613
 
 
 #==============================================================================
@@ -132,6 +142,12 @@ print(clf_grid.best_params_)
 print("best_score")
 print(clf_grid.best_score_)
 
+#Пропущенное значение - очень большое число ^2
+#best_params {'max_depth': 4, 'max_features': 'log2', 'n_estimators': 70}
+#best_score 0.702832366129
+#Пропущенное значение - очень большое число ^3
+#best_params {'max_depth': 4, 'max_features': 'log2', 'n_estimators': 70}
+#best_score 0.703163003257
 
 clf=GradientBoostingClassifier(max_depth=3, n_estimators=70)#Оценка качества=70.26 #**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
 clf.fit(data_train, train_Y)#Обучаем
@@ -159,6 +175,23 @@ listCol=data_train.columns.values.tolist()
 #10: d3_gold=7.07
 #11: first_blood_player1=2.37
 #12: radiant_boots_count=2.23
+
+#==============================================================================
+#Сводный график значений
+# import seaborn as sns
+# cols = ['d2_gold',
+# 'r2_gold',
+# 'd5_gold',
+# 'd1_gold',
+# 'r1_gold',
+# 'd4_gold',
+# 'r4_gold',
+# 'r5_gold',
+# 'r3_gold',
+# 'd3_gold']
+# sns.pairplot(data_train[cols])
+#
+#==============================================================================
 
 count=1
 for i in featureImportances.index:
