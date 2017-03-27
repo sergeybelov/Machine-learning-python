@@ -103,19 +103,11 @@ for col in data_train.columns.values.tolist():
 #Нужно найти все заполненные элементы
 #Вычислить максимум
 for col in data_train.columns.values.tolist():
-<<<<<<< HEAD
-    maxVal=data_train.loc[data_train[col].notnull(),col].median()#max()**3#Считаем максимум по всем заполненным значением и берем квадрат
+    maxVal=data_train.loc[data_train[col].notnull(),col].max()**2#max()**3#Считаем максимум по всем заполненным значением и берем квадрат
     data_train.loc[data_train[col].isnull(),col]=maxVal#Заполняем все незаполненные значения данным результатом
 
 
 #data_train.fillna(0, method=None, axis=1, inplace=True)
-
-=======
-    idx=data_train[col].notnull()
-    tt=data_train.loc[idx,col]
-    
-data_train.fillna(0, method=None, axis=1, inplace=True)
->>>>>>> 712fe3123d2f281727538779dc34e3430ee78613
 
 
 #==============================================================================
@@ -148,6 +140,10 @@ print(clf_grid.best_score_)
 #Пропущенное значение - очень большое число ^3
 #best_params {'max_depth': 4, 'max_features': 'log2', 'n_estimators': 70}
 #best_score 0.703163003257
+#Пропущенное значение - медиана
+#best_params {'max_depth': 4, 'max_features': 'log2', 'n_estimators': 70}
+#best_score 0.702924164135
+#Оценка качества=70.29
 
 clf=GradientBoostingClassifier(max_depth=3, n_estimators=70)#Оценка качества=70.26 #**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
 clf.fit(data_train, train_Y)#Обучаем
