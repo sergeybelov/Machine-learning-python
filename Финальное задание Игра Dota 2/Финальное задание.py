@@ -13,6 +13,8 @@ from sklearn.model_selection import GridSearchCV
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+from scipy.sparse import csr_matrix
+from scipy.sparse import hstack
 #==============================================================================
 # Считайте таблицу с признаками из файла features.csv с помощью кода, приведенного выше.
 # Удалите признаки, связанные с итогами матча (они помечены в описании данных как отсутствующие в тестовой выборке).
@@ -313,6 +315,7 @@ getScoreLogisticRegression("drop categories, with scaling",new_data_train_norm)
 #(вам может пригодиться фукнция unique или value_counts).
 cols=['d%s_hero' % i for i in range(1, 6)]
 iid=pd.Series(data_train[cols].values.flatten()).drop_duplicates()
+iid.sort_values(ascending=False,inplace=True)
 N=iid.shape[0]
 print(u'сколько различных идентификаторов героев существует в данной игре: ',N)
 
@@ -326,9 +329,11 @@ print(u'сколько различных идентификаторов гер�
 # Добавьте полученные признаки к числовым, которые вы использовали во втором пункте данного этапа.
 #==============================================================================
 # N — количество различных героев в выборке
-X_pick = np.zeros((data_train.shape[0], N))
+x_pick = np.zeros((data_train.shape[0], iid.head(1).values[0]))
 
 for i, match_id in enumerate(data_train.index):
     for p in range(5):
-        X_pick[i, data_train.ix[match_id, 'r%d_hero' % (p+1)]-1] = 1
-        X_pick[i, data_train.ix[match_id, 'd%d_hero' % (p+1)]-1] = -1
+        x_pick[i, data_train.ix[match_id, 'r%d_hero' % (p+1)]-1] = 1#Герой одной команды
+        x_pick[i, data_train.ix[match_id, 'd%d_hero' % (p+1)]-1] = -1#Герой другой команды
+
+new_data_train_norm_sparse=csr_matrix(hstack([x_pick,new_data_train_norm]))
