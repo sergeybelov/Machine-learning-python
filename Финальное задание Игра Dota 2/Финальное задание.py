@@ -93,7 +93,7 @@ for col in data_train.columns.values.tolist():
 # Column dire_flying_courier_time, len=71132
 # Column dire_first_ward_time, len=95404
 #==============================================================================
-
+verbose=1
 #==============================================================================
 # Замените пропуски на нули с помощью функции fillna(). На самом деле этот способ является предпочтительным для логистической регрессии,
 # поскольку он позволит пропущенному значению не вносить никакого вклада в предсказание.
@@ -124,13 +124,13 @@ for col in data_train.columns.values.tolist():
 # Достигнут ли оптимум на испытанных значениях параметра n_estimators, или же качество, скорее всего, продолжит расти при дальнейшем его увеличении?
 #==============================================================================
 
-kf = KFold(n_splits=5,shuffle=True)#Конструктор кросс-валидации
+kf = KFold(n_splits=10,shuffle=True)#Конструктор кросс-валидации
 #for n_est in [10,20,25,30,35]:
     #clf=GradientBoostingClassifier(n_estimators=n_est, verbose=False, learning_rate=0.1)
 
 
 param_grid  = {'n_estimators':[60,70],'max_depth': range(3,5),'max_features': ["log2"]}#параметры сетки тестирования алгоритма
-clf_grid = GridSearchCV(GradientBoostingClassifier(n_estimators=30), param_grid,cv=kf, n_jobs=1,verbose=3,scoring='roc_auc')
+clf_grid = GridSearchCV(GradientBoostingClassifier(n_estimators=30), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
 clf_grid.fit(data_train, train_Y)
 print("best_params")
 print(clf_grid.best_params_)
@@ -230,11 +230,11 @@ for i in featureImportances.index:
 # Важно: не забывайте, что линейные алгоритмы чувствительны к масштабу признаков!
 # Может пригодиться sklearn.preprocessing.StandartScaler.
 #==============================================================================
-param_grid  = {'C': np.logspace(-4, 1, 15)}#параметры сетки тестирования алгоритма - логарифмическая
+param_grid  = {'C': np.logspace(-4, -1, 15)}#параметры сетки тестирования алгоритма - логарифмическая
 #param_grid  = {'C': np.linspace(0.003, 0.008, 20)}#параметры сетки тестирования алгоритма - линейная
 
 def getScoreLogisticRegression(text,data_train):
-    clf_grid = GridSearchCV(LogisticRegression(n_jobs=-1), param_grid,cv=kf, n_jobs=1,verbose=3,scoring='roc_auc')
+    clf_grid = GridSearchCV(LogisticRegression(n_jobs=-1), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
     clf_grid.fit(data_train, train_Y)
     print(u"best_params ",text)
     print(clf_grid.best_params_)
@@ -252,6 +252,7 @@ getScoreLogisticRegression("without scaling",data_train)
 data_train_norm=StandardScaler().fit_transform(data_train)
 getScoreLogisticRegression("with scaling",data_train_norm)
 
+del data_train_norm
 #best_params with scaling
 #{'C': 0.0037275937203149379}
 #best_score with scaling
@@ -302,9 +303,14 @@ getScoreLogisticRegression("drop categories, with scaling",new_data_train_norm)
 #best_score  drop categories, with scaling
 #0.715990354582
 
+#best_params  drop categories, with scaling
+#{'C': 0.0051794746792312128}
+#best_score  drop categories, with scaling
+#0.716022599382
+
 #==============================================================================
 # Как влияет на качество логистической регрессии удаление категориальных признаков (укажите новое значение метрики качества)? - Обучается чуть лучше, едва заметно
-# Чем вы можете объяснить это изменение? - уменьшение размерности модели, как минимум не ухудшает прогнозируемость
+# Чем вы можете объяснить это изменение? - уменьшение размерности модели, как минимум не ухудшает прогнозируемость, линейные модели не очень хорошо работают с категориальными объектами в отличии от деревьев
 #==============================================================================
 
 #На предыдущем шаге мы исключили из выборки признаки rM_hero и dM_hero, которые показывают,
@@ -318,6 +324,7 @@ N=iid.shape[0]
 iid=pd.DataFrame(data=list(range(N)),index=iid.tolist())#переводим в обычный массив, чтобы индексация была чистая
 print(u'сколько различных идентификаторов героев существует в данной игре: ',N)
 
+#сколько различных идентификаторов героев существует в данной игре:  108
 
 #==============================================================================
 # Воспользуемся подходом "мешок слов" для кодирования информации о героях.
@@ -339,4 +346,31 @@ for i, match_id in enumerate(data_train.index):
        x_pick[i, getIndexPlace(data_train.ix[match_id, 'd%d_hero' % (p+1)])] = -1#Герой другой команды
 
 new_data_train_norm_sparse=csr_matrix(np.concatenate([x_pick,new_data_train_norm],axis=1))
+del x_pick,new_data_train_norm
+
 getScoreLogisticRegression("sparse matrix",new_data_train_norm_sparse)
+
+#best_params  sparse matrix
+#{'C': 0.071968567300115208}
+#best_score  sparse matrix
+#0.751559380639
+
+#best_params  sparse matrix
+#{'C': 0.037275937203149381}
+#best_score  sparse matrix
+#0.751590669294
+
+#best_params  sparse matrix
+#{'C': 0.061054022965853265}
+#best_score  sparse matrix
+#0.751886025993
+
+#==============================================================================
+# Какое получилось качество при добавлении "мешка слов" по героям? - 0.751559380639
+# Улучшилось ли оно по сравнению с предыдущим вариантом? - да, улучшилось
+# Чем вы можете это объяснить? Переход из категориального кодирование на dummy - улучшает прогнозирование по модели на линейных методах
+#==============================================================================
+
+#==============================================================================
+# Какое минимальное и максимальное значение прогноза на тестовой выборке получилось у лучшего из алгоритмов?
+#==============================================================================
