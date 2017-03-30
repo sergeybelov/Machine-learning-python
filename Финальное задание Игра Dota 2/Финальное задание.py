@@ -103,11 +103,16 @@ verbose=1
 # но при желании попробуйте разные подходы к обработке пропусков и сравните их между собой.
 #==============================================================================
 
+# индекс, по которому будем отделять обучающую выборку от тестовой
+idx_split = data_train.shape[0]#индекс последнего элемента
+data_full = pd.concat([data_train, data_test])#формируем генеральную выборку из тренирующей и тестовой для одинаковой обработки
+del data_train, data_test#удаляем дата сеты чтобы не мешались в памяти
+
 #Нужно найти все заполненные элементы
 #Вычислить максимум
-for col in data_train.columns.values.tolist():
-    maxVal=data_train.loc[data_train[col].notnull(),col].max()**2#max()**3#Считаем максимум по всем заполненным значением и берем квадрат
-    data_train.loc[data_train[col].isnull(),col]=maxVal#Заполняем все незаполненные значения данным результатом
+for col in data_full.columns.values.tolist():
+    maxVal=data_full.loc[data_full[col].notnull(),col].max()**2#max()**3#Считаем максимум по всем заполненным значением и берем квадрат
+    data_full.loc[data_full[col].isnull(),col]=maxVal#Заполняем все незаполненные значения данным результатом
 
 
 #data_train.fillna(0, method=None, axis=1, inplace=True)
@@ -131,7 +136,7 @@ kf = KFold(n_splits=10,shuffle=True)#Конструктор кросс-вали�
 
 param_grid  = {'n_estimators':[60,70],'max_depth': range(3,5),'max_features': ["log2"]}#параметры сетки тестирования алгоритма
 clf_grid = GridSearchCV(GradientBoostingClassifier(n_estimators=30), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
-clf_grid.fit(data_train, train_Y)
+clf_grid.fit(data_full.iloc[:idx_split, :], train_Y)
 print("best_params")
 print(clf_grid.best_params_)
 print("best_score")
@@ -150,10 +155,10 @@ print(clf_grid.best_score_)
 
 clf=GradientBoostingClassifier(max_depth=3, n_estimators=70)#Оценка качества=70.26 #**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
 start_time = datetime.datetime.now()
-clf.fit(data_train, train_Y)#Обучаем
+clf.fit(data_full.iloc[:idx_split, :], train_Y)#Обучаем
 print('Time elapsed:', datetime.datetime.now() - start_time)#замеряем время
 
-scores = cross_val_score(clf, data_train, train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
+scores = cross_val_score(clf, data_full.iloc[:idx_split, :], train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
 val=round(scores.mean()*100,2)#берем среднее значение оценки
 print("Оценка качества=%s" % val)
 
@@ -161,7 +166,7 @@ print("Оценка качества=%s" % val)
 #получаем список показателей которые сильнее всего влияют на предсказания
 featureImportances=pd.DataFrame(data=clf.feature_importances_)
 featureImportances.sort_values([0],ascending=False,inplace=True)
-listCol=data_train.columns.values.tolist()
+listCol=data_full.columns.values.tolist()
 
 #Оценка качества=70.25
 #1: d2_gold=8.43
@@ -194,6 +199,7 @@ listCol=data_train.columns.values.tolist()
 #
 #==============================================================================
 
+print('Характеристики которые вносят наибольший вклад в модель')
 count=1
 for i in featureImportances.index:
     if featureImportances.loc[i][0]<0.02: break
@@ -233,11 +239,6 @@ for i in featureImportances.index:
 param_grid  = {'C': np.logspace(-4, -1, 15)}#параметры сетки тестирования алгоритма - логарифмическая
 #param_grid  = {'C': np.linspace(0.003, 0.008, 20)}#параметры сетки тестирования алгоритма - линейная
 
-# индекс, по которому будем отделять обучающую выборку от тестовой
-idx_split = data_train.shape[0]#индекс последнего элемента
-data_full = pd.concat([data_train, data_test])
-del data_train, data_test#удаляем дата сеты чтобы не мешались в памяти
-
 def getScoreLogisticRegression(text,data_train):
     clf_grid = GridSearchCV(LogisticRegression(n_jobs=-1), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
     clf_grid.fit(data_train.iloc[:idx_split, :], train_Y)
@@ -252,8 +253,8 @@ def getScoreLogisticRegression(text,data_train):
     val=round(scores.mean()*100,2)#берем среднее значение оценки
     print("Оценка качества GridSearchCV (%s)=%s" % (text,val))
 
-    y_pred=lr.predict(data_train.iloc[idx_split:, :])#прогнозируем
-    y_pred.sort_values(inplace=True)#сортируем
+    y_pred=pd.DataFrame(data=lr.predict(data_train.iloc[idx_split:, :]))#прогнозируем
+    y_pred.sort_values(['0'],inplace=True)#сортируем
 
 
 getScoreLogisticRegression("without scaling",data_full)
