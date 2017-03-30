@@ -24,7 +24,7 @@ data_test = pd.read_csv('features_test.csv')
 
 train_Y=data_train['radiant_win']#Целевая переменная 1, если победила команда Radiant, 0 — иначе
 columns_train_difference=data_train.columns.difference(data_test.columns.values.tolist()).tolist()#Удалите признаки, которых нет в тестовой выборке - получаем различие в колонках
-data_train.drop(columns_train_difference, axis=1, inplace=True)#elfkztv внутри датасета
+data_train.drop(columns_train_difference, axis=1, inplace=True)#удаляем внутри датасета
 
 #==============================================================================
 # Описание признаков в таблице
@@ -233,15 +233,30 @@ for i in featureImportances.index:
 param_grid  = {'C': np.logspace(-4, -1, 15)}#параметры сетки тестирования алгоритма - логарифмическая
 #param_grid  = {'C': np.linspace(0.003, 0.008, 20)}#параметры сетки тестирования алгоритма - линейная
 
+# индекс, по которому будем отделять обучающую выборку от тестовой
+idx_split = data_train.shape[0]#индекс последнего элемента
+data_full = pd.concat([data_train, data_test])
+del data_train, data_test#удаляем дата сеты чтобы не мешались в памяти
+
 def getScoreLogisticRegression(text,data_train):
     clf_grid = GridSearchCV(LogisticRegression(n_jobs=-1), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
-    clf_grid.fit(data_train, train_Y)
-    print(u"best_params ",text)
-    print(clf_grid.best_params_)
-    print(u"best_score ",text)
-    print(clf_grid.best_score_)
+    clf_grid.fit(data_train.iloc[:idx_split, :], train_Y)
+#    print(u"best_params ",text)
+#    print(clf_grid.best_params_)
+#    print(u"best_score ",text)
+#    print(clf_grid.best_score_)
 
-getScoreLogisticRegression("without scaling",data_train)
+    lr=LogisticRegression(n_jobs=-1,**clf_grid.best_params_)#Создаем логистрическую регрессию с лучшими параметрами
+    lr.fit(data_train.iloc[:idx_split, :], train_Y)#Обучаем
+    scores = cross_val_score(clf, data_train.iloc[:idx_split, :], train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
+    val=round(scores.mean()*100,2)#берем среднее значение оценки
+    print("Оценка качества GridSearchCV (%s)=%s" % (text,val))
+
+    y_pred=lr.predict(data_train.iloc[idx_split:, :])#прогнозируем
+    y_pred.sort_values(inplace=True)#сортируем
+
+
+getScoreLogisticRegression("without scaling",data_full)
 
 #best_params whithot scaling
 #{'C': 1.0000000000000001e-05}
@@ -249,10 +264,10 @@ getScoreLogisticRegression("without scaling",data_train)
 #0.557243278127
 
 #попробуем шкалировать
-data_train_norm=StandardScaler().fit_transform(data_train)
-getScoreLogisticRegression("with scaling",data_train_norm)
+data_full_norm=StandardScaler().fit_transform(data_full)
+getScoreLogisticRegression("with scaling",data_full_norm)
 
-del data_train_norm
+del data_full_norm
 #best_params with scaling
 #{'C': 0.0037275937203149379}
 #best_score with scaling
@@ -285,8 +300,8 @@ cols.extend(['d%s_hero' % i for i in range(1, 6)])
 cols.append('lobby_type')
 
 #удаляем категориальные данные, нормируем и повторно ищем лучший коэффициент
-new_data_train_norm=StandardScaler().fit_transform(data_train.drop(cols, axis=1))
-getScoreLogisticRegression("drop categories, with scaling",new_data_train_norm)
+data_full_norm=StandardScaler().fit_transform(data_full.drop(cols, axis=1))
+getScoreLogisticRegression("drop categories, with scaling",data_full_norm)
 
 #best_params  drop categories, with scaling
 #{'C': 0.0037275937203149379}
@@ -319,7 +334,7 @@ getScoreLogisticRegression("drop categories, with scaling",new_data_train_norm)
 #Выясните из данных, сколько различных идентификаторов героев существует в данной игре
 #(вам может пригодиться фукнция unique или value_counts).
 cols=['d%s_hero' % i for i in range(1, 6)]
-iid=pd.Series(data_train[cols].values.flatten()).drop_duplicates()
+iid=pd.Series(data_full_norm[cols].values.flatten()).drop_duplicates()
 N=iid.shape[0]
 iid=pd.DataFrame(data=list(range(N)),index=iid.tolist())#переводим в обычный массив, чтобы индексация была чистая
 print(u'сколько различных идентификаторов героев существует в данной игре: ',N)
@@ -335,20 +350,21 @@ print(u'сколько различных идентификаторов гер�
 # Добавьте полученные признаки к числовым, которые вы использовали во втором пункте данного этапа.
 #==============================================================================
 # N — количество различных героев в выборке
-x_pick = np.zeros((data_train.shape[0], N))
+x_pick = np.zeros((data_full_norm.shape[0], N))
 
 def getIndexPlace(hero_iid):
     return iid.ix[hero_iid,0]
 
-for i, match_id in enumerate(data_train.index):
+for i, match_id in enumerate(data_full_norm.index):
    for p in range(5):
-       x_pick[i, getIndexPlace(data_train.ix[match_id, 'r%d_hero' % (p+1)])] = 1#Герой одной команды
-       x_pick[i, getIndexPlace(data_train.ix[match_id, 'd%d_hero' % (p+1)])] = -1#Герой другой команды
+       x_pick[i, getIndexPlace(data_full_norm.ix[match_id, 'r%d_hero' % (p+1)])] = 1#Герой одной команды
+       x_pick[i, getIndexPlace(data_full_norm.ix[match_id, 'd%d_hero' % (p+1)])] = -1#Герой другой команды
 
-new_data_train_norm_sparse=csr_matrix(np.concatenate([x_pick,new_data_train_norm],axis=1))
-del x_pick,new_data_train_norm
+data_full_norm_norm_sparse=csr_matrix(np.concatenate([x_pick,data_full_norm],axis=1))
+del x_pick,data_full_norm
 
-getScoreLogisticRegression("sparse matrix",new_data_train_norm_sparse)
+getScoreLogisticRegression("sparse matrix",data_full_norm_norm_sparse)
+del data_full_norm_norm_sparse
 
 #best_params  sparse matrix
 #{'C': 0.071968567300115208}
@@ -368,7 +384,7 @@ getScoreLogisticRegression("sparse matrix",new_data_train_norm_sparse)
 #==============================================================================
 # Какое получилось качество при добавлении "мешка слов" по героям? - 0.751559380639
 # Улучшилось ли оно по сравнению с предыдущим вариантом? - да, улучшилось
-# Чем вы можете это объяснить? Переход из категориального кодирование на dummy - улучшает прогнозирование по модели на линейных методах
+# Чем вы можете это объяснить? Переход из категориального кодирования на dummy кодирование - улучшает прогнозирование по модели на линейных методах
 #==============================================================================
 
 #==============================================================================
