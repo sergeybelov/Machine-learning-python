@@ -106,7 +106,7 @@ verbose=1
 # индекс, по которому будем отделять обучающую выборку от тестовой
 idx_split = data_train.shape[0]#индекс последнего элемента
 data_full = pd.concat([data_train, data_test])#формируем генеральную выборку из тренирующей и тестовой для одинаковой обработки
-del data_train, data_test#удаляем дата сеты чтобы не мешались в памяти
+#del data_train, data_test#удаляем дата сеты чтобы не мешались в памяти
 
 #Нужно найти все заполненные элементы
 #Вычислить максимум
@@ -236,6 +236,11 @@ for i in featureImportances.index:
 # Важно: не забывайте, что линейные алгоритмы чувствительны к масштабу признаков!
 # Может пригодиться sklearn.preprocessing.StandartScaler.
 #==============================================================================
+data_full = pd.concat([data_train, data_test])#формируем генеральную выборку из тренирующей и тестовой для одинаковой обработки
+del data_train, data_test#удаляем дата сеты чтобы не мешались в памяти
+data_full.fillna(0, method=None, axis=1, inplace=True)#для логистической регрессии зануляем пустые значения
+
+
 param_grid  = {'C': np.logspace(-4, -1, 15)}#параметры сетки тестирования алгоритма - логарифмическая
 #param_grid  = {'C': np.linspace(0.003, 0.008, 20)}#параметры сетки тестирования алгоритма - линейная
 
@@ -253,8 +258,9 @@ def getScoreLogisticRegression(text,data_train):
     val=round(scores.mean()*100,2)#берем среднее значение оценки
     print("Оценка качества GridSearchCV (%s)=%s" % (text,val))
 
-    y_pred=pd.DataFrame(data=lr.predict(data_train.iloc[idx_split:, :]))#прогнозируем
-    y_pred.sort_values(['0'],inplace=True)#сортируем
+    y_pred=pd.DataFrame(data=lr.predict_proba(data_train.iloc[idx_split:, :]))#прогнозируем
+    y_pred.sort_values([0],inplace=True)#сортируем
+    print(u'min=',y_pred.iloc[0,0],'; max=',y_pred.iloc[y_pred.shape[0]-1,0])
 
 
 getScoreLogisticRegression("without scaling",data_full)
@@ -265,7 +271,7 @@ getScoreLogisticRegression("without scaling",data_full)
 #0.557243278127
 
 #попробуем шкалировать
-data_full_norm=StandardScaler().fit_transform(data_full)
+data_full_norm=pd.DataFrame(data=StandardScaler().fit_transform(data_full))
 getScoreLogisticRegression("with scaling",data_full_norm)
 
 del data_full_norm
@@ -296,12 +302,11 @@ del data_full_norm
 # Уберите их из выборки, и проведите кросс-валидацию для логистической регрессии на новой выборке с подбором
 # лучшего параметра регуляризации. Изменилось ли качество? Чем вы можете это объяснить?
 #==============================================================================
-cols = ['r%s_hero' % i for i in range(1, 6)]
-cols.extend(['d%s_hero' % i for i in range(1, 6)])
+cols = ['r%s_hero' % i for i in range(1, 6)]+['d%s_hero' % i for i in range(1, 6)]#колонки героев
 cols.append('lobby_type')
 
 #удаляем категориальные данные, нормируем и повторно ищем лучший коэффициент
-data_full_norm=StandardScaler().fit_transform(data_full.drop(cols, axis=1))
+data_full_norm=pd.DataFrame(data=StandardScaler().fit_transform(data_full.drop(cols, axis=1)))
 getScoreLogisticRegression("drop categories, with scaling",data_full_norm)
 
 #best_params  drop categories, with scaling
@@ -334,8 +339,8 @@ getScoreLogisticRegression("drop categories, with scaling",data_full_norm)
 #Это важные признаки — герои имеют разные характеристики, и некоторые из них выигрывают чаще, чем другие.
 #Выясните из данных, сколько различных идентификаторов героев существует в данной игре
 #(вам может пригодиться фукнция unique или value_counts).
-cols=['d%s_hero' % i for i in range(1, 6)]
-iid=pd.Series(data_full_norm[cols].values.flatten()).drop_duplicates()
+cols.remove('lobby_type')#elfkztv из списка колонок лишнюю, чтобы остались только герои
+iid=pd.Series(data_full[cols].values.flatten()).drop_duplicates()
 N=iid.shape[0]
 iid=pd.DataFrame(data=list(range(N)),index=iid.tolist())#переводим в обычный массив, чтобы индексация была чистая
 print(u'сколько различных идентификаторов героев существует в данной игре: ',N)
@@ -353,13 +358,11 @@ print(u'сколько различных идентификаторов гер�
 # N — количество различных героев в выборке
 x_pick = np.zeros((data_full_norm.shape[0], N))
 
-def getIndexPlace(hero_iid):
-    return iid.ix[hero_iid,0]
+for i, match_id in enumerate(data_full.index):
+   row=data_full.iloc[i]
+   for col in cols:
+       x_pick[i, iid.ix[row.loc[col],0]] = 1 if col.startswith('r') else -1#классификатор героя одной или другой команды
 
-for i, match_id in enumerate(data_full_norm.index):
-   for p in range(5):
-       x_pick[i, getIndexPlace(data_full_norm.ix[match_id, 'r%d_hero' % (p+1)])] = 1#Герой одной команды
-       x_pick[i, getIndexPlace(data_full_norm.ix[match_id, 'd%d_hero' % (p+1)])] = -1#Герой другой команды
 
 data_full_norm_norm_sparse=csr_matrix(np.concatenate([x_pick,data_full_norm],axis=1))
 del x_pick,data_full_norm
