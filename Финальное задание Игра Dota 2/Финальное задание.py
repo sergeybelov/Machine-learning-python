@@ -13,18 +13,19 @@ from sklearn.model_selection import GridSearchCV
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
-from scipy.sparse import csr_matrix
+#from scipy.sparse import csr_matrix
 
 #==============================================================================
 # Считайте таблицу с признаками из файла features.csv с помощью кода, приведенного выше.
 # Удалите признаки, связанные с итогами матча (они помечены в описании данных как отсутствующие в тестовой выборке).
 #==============================================================================
-data_train = pd.read_csv('features.csv')
-data_test = pd.read_csv('features_test.csv')
+data_train = pd.read_csv('features.csv',index_col='match_id')
+data_test = pd.read_csv('features_test.csv',index_col='match_id')
 
 train_Y=data_train['radiant_win']#Целевая переменная 1, если победила команда Radiant, 0 — иначе
 columns_train_difference=data_train.columns.difference(data_test.columns.values.tolist()).tolist()#Удалите признаки, которых нет в тестовой выборке - получаем различие в колонках
 data_train.drop(columns_train_difference, axis=1, inplace=True)#удаляем внутри датасета
+
 
 #==============================================================================
 # Описание признаков в таблице
@@ -110,6 +111,7 @@ data_full = pd.concat([data_train, data_test])#формируем генерал
 
 #Нужно найти все заполненные элементы
 #Вычислить максимум
+
 for col in data_full.columns.values.tolist():
     maxVal=data_full.loc[data_full[col].notnull(),col].max()**2#max()**3#Считаем максимум по всем заполненным значением и берем квадрат
     data_full.loc[data_full[col].isnull(),col]=maxVal#Заполняем все незаполненные значения данным результатом
@@ -129,44 +131,59 @@ for col in data_full.columns.values.tolist():
 # Достигнут ли оптимум на испытанных значениях параметра n_estimators, или же качество, скорее всего, продолжит расти при дальнейшем его увеличении?
 #==============================================================================
 
-kf = KFold(n_splits=10,shuffle=True)#Конструктор кросс-валидации
-#for n_est in [10,20,25,30,35]:
-    #clf=GradientBoostingClassifier(n_estimators=n_est, verbose=False, learning_rate=0.1)
+kf = KFold(n_splits=5,shuffle=True)#Конструктор кросс-валидации
 
 
+#Проверяем гипотезу со стандартными настройками и заданным количеством деревьев
+print('Проверяем гипотезу со стандартными настройками и заданным количеством деревьев')
+for est in range(10,31,10):
+    clf=GradientBoostingClassifier(n_estimators=est, random_state=241)#max_depth=3, n_estimators=70 Оценка качества=70.26 #**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
+    start_time = datetime.datetime.now()
+    clf.fit(data_full.iloc[:idx_split, :], train_Y)#Обучаем
+    print('Time elapsed:', datetime.datetime.now() - start_time)#замеряем время
+
+    scores = cross_val_score(clf, data_full.iloc[:idx_split, :], train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
+    val=round(scores.mean()*100,2)#берем среднее значение оценки
+    print("n_estimators=%s, Оценка качества=%s" % (est,val))
+
+
+#Проверяем гипотезу что увеличение количества деревьев улучшает качество с уменьшением глубины дерева и ускоряет процесс
+print('Проверяем гипотезу что увеличение количества деревьев улучшает качество с уменьшением глубины дерева и ускоряет процесс')
 param_grid  = {'n_estimators':[60,70],'max_depth': range(3,5),'max_features': ["log2"]}#параметры сетки тестирования алгоритма
-clf_grid = GridSearchCV(GradientBoostingClassifier(n_estimators=30), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
+clf_grid = GridSearchCV(GradientBoostingClassifier(random_state=241), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
 clf_grid.fit(data_full.iloc[:idx_split, :], train_Y)
 print("best_params")
 print(clf_grid.best_params_)
 print("best_score")
 print(clf_grid.best_score_)
 
+
 #Пропущенное значение - очень большое число ^2
 #best_params {'max_depth': 4, 'max_features': 'log2', 'n_estimators': 70}
 #best_score 0.702832366129
 #Пропущенное значение - очень большое число ^3
 #best_params {'max_depth': 4, 'max_features': 'log2', 'n_estimators': 70}
-#best_score 0.703163003257
+#best_score 0.7031630032570212.3566666666666666666660.2315.2333333333333333333333333333332
 #Пропущенное значение - медиана
 #best_params {'max_depth': 4, 'max_features': 'log2', 'n_estimators': 70}
 #best_score 0.702924164135
 #Оценка качества=70.29
 
-clf=GradientBoostingClassifier(max_depth=3, n_estimators=70)#Оценка качества=70.26 #**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
+clf=GradientBoostingClassifier(**clf_grid.best_params_)#max_depth=3, n_estimators=70 Оценка качества=70.26 #**clf_grid.best_params_)#Передаем лучшие параметры в классификатор
 start_time = datetime.datetime.now()
 clf.fit(data_full.iloc[:idx_split, :], train_Y)#Обучаем
 print('Time elapsed:', datetime.datetime.now() - start_time)#замеряем время
 
 scores = cross_val_score(clf, data_full.iloc[:idx_split, :], train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
 val=round(scores.mean()*100,2)#берем среднее значение оценки
-print("Оценка качества=%s" % val)
+print("Оценка качества при увеличении числа деревьев=%s" % val)
 
 
 #получаем список показателей которые сильнее всего влияют на предсказания
 featureImportances=pd.DataFrame(data=clf.feature_importances_)
 featureImportances.sort_values([0],ascending=False,inplace=True)
 listCol=data_full.columns.values.tolist()
+
 
 #Оценка качества=70.25
 #1: d2_gold=8.43
@@ -227,6 +244,7 @@ for i in featureImportances.index:
 # Что бы вы предложили делать, чтобы ускорить его обучение при увеличении количества деревьев? Уменьшить глубину деревьев и количество признаков, потеря точности небольшая (max_depth=4, max_features=sqrt, n_estimators=50, score=0.700039, total=   3.9s), а выигрыш во времени на порядок, использовать признаки имеющие максимальный вес при бустинге
 #==============================================================================
 
+print('--------------------------')
 #==============================================================================
 # Оцените качество логистической регрессии (sklearn.linear_model.LogisticRegression с L2-регуляризацией)
 # с помощью кросс-валидации по той же схеме, которая использовалась для градиентного бустинга.
@@ -237,30 +255,40 @@ for i in featureImportances.index:
 # Может пригодиться sklearn.preprocessing.StandartScaler.
 #==============================================================================
 data_full = pd.concat([data_train, data_test])#формируем генеральную выборку из тренирующей и тестовой для одинаковой обработки
+data_full.index=range(0,len(data_full))#реиндексируем, иначе поиск по индексу работает некорректно
 del data_train, data_test#удаляем дата сеты чтобы не мешались в памяти
 data_full.fillna(0, method=None, axis=1, inplace=True)#для логистической регрессии зануляем пустые значения
 
 
-param_grid  = {'C': np.logspace(-4, -1, 15)}#параметры сетки тестирования алгоритма - логарифмическая
+param_grid  = {'C': np.logspace(-3, -1, 10)}#параметры сетки тестирования алгоритма - логарифмическая
 #param_grid  = {'C': np.linspace(0.003, 0.008, 20)}#параметры сетки тестирования алгоритма - линейная
 
-def getScoreLogisticRegression(text,data_train):
-    clf_grid = GridSearchCV(LogisticRegression(n_jobs=-1), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
-    clf_grid.fit(data_train.iloc[:idx_split, :], train_Y)
-#    print(u"best_params ",text)
-#    print(clf_grid.best_params_)
-#    print(u"best_score ",text)
-#    print(clf_grid.best_score_)
+#Поиск лучшего коэффициента обучения
+#print('Поиск лучшего коэффициента обучения')
 
-    lr=LogisticRegression(n_jobs=-1,**clf_grid.best_params_)#Создаем логистрическую регрессию с лучшими параметрами
+def getScoreLogisticRegression(text,data_train,saveToFile=False):
+    clf_grid = GridSearchCV(LogisticRegression(random_state=241,n_jobs=-1), param_grid,cv=kf, n_jobs=1,verbose=verbose,scoring='roc_auc')
+    clf_grid.fit(data_full.iloc[:idx_split, :], train_Y)
+    #print(u"best_params")
+    #print(clf_grid.best_params_)
+    #print(u"best_score")
+    #print(clf_grid.best_score_)
+
+
+    lr=LogisticRegression(n_jobs=-1,random_state=241,**clf_grid.best_params_)#Создаем логистрическую регрессию с лучшими параметрами
     lr.fit(data_train.iloc[:idx_split, :], train_Y)#Обучаем
-    scores = cross_val_score(clf, data_train.iloc[:idx_split, :], train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
+    scores = cross_val_score(lr, data_train.iloc[:idx_split, :], train_Y, scoring='roc_auc', cv=kf)#Оценка алгоритма
     val=round(scores.mean()*100,2)#берем среднее значение оценки
     print("Оценка качества GridSearchCV (%s)=%s" % (text,val))
 
     y_pred=pd.DataFrame(data=lr.predict_proba(data_train.iloc[idx_split:, :]))#прогнозируем
     y_pred.sort_values([0],inplace=True)#сортируем
-    print(u'min=',y_pred.iloc[0,0],'; max=',y_pred.iloc[y_pred.shape[0]-1,0])
+    print(u'min=',y_pred.iloc[0,1],'; max=',y_pred.iloc[y_pred.shape[0]-1,1])#1 - класс означает, что Radiant победил
+
+    if saveToFile:
+        y_pred.sort_index(inplace=True)
+        y_pred.to_csv('Radiant win predict',columns=[1],index_label=['match_id'],header=['prediction'])
+
 
 
 getScoreLogisticRegression("without scaling",data_full)
@@ -343,6 +371,7 @@ cols.remove('lobby_type')#elfkztv из списка колонок лишнюю,
 iid=pd.Series(data_full[cols].values.flatten()).drop_duplicates()
 N=iid.shape[0]
 iid=pd.DataFrame(data=list(range(N)),index=iid.tolist())#переводим в обычный массив, чтобы индексация была чистая
+iid.sort_index(inplace=True)
 print(u'сколько различных идентификаторов героев существует в данной игре: ',N)
 
 #сколько различных идентификаторов героев существует в данной игре:  108
@@ -356,19 +385,27 @@ print(u'сколько различных идентификаторов гер�
 # Добавьте полученные признаки к числовым, которые вы использовали во втором пункте данного этапа.
 #==============================================================================
 # N — количество различных героев в выборке
-x_pick = np.zeros((data_full_norm.shape[0], N))
-
-for i, match_id in enumerate(data_full.index):
-   row=data_full.iloc[i]
-   for col in cols:
-       x_pick[i, iid.ix[row.loc[col],0]] = 1 if col.startswith('r') else -1#классификатор героя одной или другой команды
+print('Старт dummy кодирования...')
+start_time = datetime.datetime.now()
+x_pick = pd.DataFrame(index=data_full_norm.index,columns=range(0,N))#Датафрейм для dummy-переменных
 
 
-data_full_norm_norm_sparse=csr_matrix(np.concatenate([x_pick,data_full_norm],axis=1))
+for match_id in data_full.index:
+   row=data_full.ix[match_id,cols]#делаем слайс по строке и по нужным колонкам
+   rowPick=x_pick.ix[match_id]
+   for j, col in enumerate(row):
+       rowPick[iid.ix[col,0]] = 1 if j<5 else -1#классификатор героя одной или другой команды
+
+x_pick.fillna(0, method=None, axis=1, inplace=True)
+print('Завершили. Time elapsed:', datetime.datetime.now() - start_time)#замеряем время
+
+total=data_full_norm.join(x_pick,rsuffix='_',how='inner')#pd.DataFrame(data=np.concatenate([x_pick,data_full_norm],axis=1))
 del x_pick,data_full_norm
+getScoreLogisticRegression("dummy coding",total,True)
 
-getScoreLogisticRegression("sparse matrix",data_full_norm_norm_sparse)
-del data_full_norm_norm_sparse
+
+#getScoreLogisticRegression("sparse matrix",data_full_norm_norm_sparse)
+#del data_full_norm_norm_sparse
 
 #best_params  sparse matrix
 #{'C': 0.071968567300115208}
@@ -393,4 +430,72 @@ del data_full_norm_norm_sparse
 
 #==============================================================================
 # Какое минимальное и максимальное значение прогноза на тестовой выборке получилось у лучшего из алгоритмов?
+#==============================================================================
+
+#==============================================================================
+# Select count=97230
+# Column first_blood_time, len=77677
+# Column first_blood_team, len=77677
+# Column first_blood_player1, len=77677
+# Column first_blood_player2, len=53243
+# Column radiant_bottle_time, len=81539
+# Column radiant_courier_time, len=96538
+# Column radiant_flying_courier_time, len=69751
+# Column radiant_first_ward_time, len=95394
+# Column dire_bottle_time, len=81087
+# Column dire_courier_time, len=96554
+# Column dire_flying_courier_time, len=71132
+# Column dire_first_ward_time, len=95404
+# Проверяем гипотезу со стандартными настройками и заданным количеством деревьев
+# Time elapsed: 0:00:04.749582
+# n_estimators=10, Оценка качества=66.74
+# Time elapsed: 0:00:08.723383
+# n_estimators=20, Оценка качества=68.36
+# Time elapsed: 0:00:13.144788
+# n_estimators=30, Оценка качества=69.05
+# Проверяем гипотезу что увеличение количества деревьев улучшает качество с уменьшением глубины дерева и ускоряет процесс
+# Fitting 10 folds for each of 4 candidates, totalling 40 fits
+# [Parallel(n_jobs=1)]: Done  40 out of  40 | elapsed:  2.5min finished
+# best_params
+# {'max_depth': 4, 'max_features': 'log2', 'n_estimators': 70}
+# best_score
+# 0.703331166405
+# Time elapsed: 0:00:04.665730
+# Оценка качества при увеличении числа деревьев=70.34
+# Характеристики которые вносят наибольший вклад в модель
+# 1: d2_gold=5.47
+# 2: d1_gold=5.1
+# 3: r2_gold=5.05
+# 4: r1_gold=4.8
+# 5: d3_gold=4.54
+# 6: r4_gold=4.33
+# 7: d4_gold=4.32
+# 8: r5_gold=3.87
+# 9: d5_gold=3.86
+# 10: r3_gold=2.72
+# 11: d5_lh=2.65
+# 12: r3_lh=2.35
+# 13: r4_lh=2.34
+# 14: d1_lh=2.12
+# 15: radiant_boots_count=2.09
+# --------------------------
+# Fitting 10 folds for each of 10 candidates, totalling 100 fits
+# [Parallel(n_jobs=1)]: Done 100 out of 100 | elapsed:   52.9s finished
+# Оценка качества GridSearchCV (without scaling)=51.35
+# min= 0.481385096984 ; max= 0.48164115994
+# Fitting 10 folds for each of 10 candidates, totalling 100 fits
+# [Parallel(n_jobs=1)]: Done 100 out of 100 | elapsed:   49.8s finished
+# Оценка качества GridSearchCV (with scaling)=71.63
+# min= 0.0168678616386 ; max= 0.989858087529
+# Fitting 10 folds for each of 10 candidates, totalling 100 fits
+# [Parallel(n_jobs=1)]: Done 100 out of 100 | elapsed:   49.2s finished
+# Оценка качества GridSearchCV (drop categories, with scaling)=71.64
+# min= 0.0172399825669 ; max= 0.989852747144
+# сколько различных идентификаторов героев существует в данной игре:  108
+# Старт dummy кодирования...
+# Завершили. Time elapsed: 0:03:41.448749
+# Fitting 10 folds for each of 10 candidates, totalling 100 fits
+# [Parallel(n_jobs=1)]: Done 100 out of 100 | elapsed:   49.6s finished
+# Оценка качества GridSearchCV (dummy coding)=74.68
+# min= 0.00775904001868 ; max= 0.990233686565
 #==============================================================================
