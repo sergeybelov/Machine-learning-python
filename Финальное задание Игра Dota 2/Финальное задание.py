@@ -387,16 +387,27 @@ print(u'сколько различных идентификаторов гер�
 # N — количество различных героев в выборке
 print('Старт dummy кодирования...')
 start_time = datetime.datetime.now()
-x_pick = pd.DataFrame(index=data_full_norm.index,columns=range(0,N))#Датафрейм для dummy-переменных
+#x_pick = pd.DataFrame(index=data_full_norm.index,columns=range(0,N))#Датафрейм для dummy-переменных
 
 
-for match_id in data_full.index:
-   row=data_full.ix[match_id,cols]#делаем слайс по строке и по нужным колонкам
-   rowPick=x_pick.ix[match_id]
-   for j, col in enumerate(row):
-       rowPick[iid.ix[col,0]] = 1 if j<5 else -1#классификатор героя одной или другой команды
+#for match_id in data_full.index:
+#   row=data_full.ix[match_id,cols]#делаем слайс по строке и по нужным колонкам
+#   rowPick=x_pick.ix[match_id]
+#   for j, col in enumerate(row):
+#       rowPick[iid.ix[col,0]] = 1 if j<5 else -1#классификатор героя одной или другой команды
+#
+#x_pick.fillna(0, method=None, axis=1, inplace=True)
 
-x_pick.fillna(0, method=None, axis=1, inplace=True)
+x_pick_d = pd.get_dummies(data_full[cols[5:]].astype('str'))
+x_pick_r = pd.get_dummies(data_full[cols[:5]].astype('str'))
+x_pick_r *= -1
+x_pick_d.columns=[col[1:] for col in list(x_pick_d.columns)]#убираем в колонках принадлежность к классам
+x_pick_r.columns=[col[1:] for col in list(x_pick_r.columns)]#убираем в колонках принадлежность к классам
+
+x_pick=x_pick_d+x_pick_r
+del x_pick_d,x_pick_r
+
+
 print('Завершили. Time elapsed:', datetime.datetime.now() - start_time)#замеряем время
 
 total=data_full_norm.join(x_pick,rsuffix='_',how='inner')#pd.DataFrame(data=np.concatenate([x_pick,data_full_norm],axis=1))
